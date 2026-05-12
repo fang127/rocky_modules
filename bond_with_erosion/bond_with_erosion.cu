@@ -37,14 +37,28 @@ struct ModuleData
     int ppi_bond_state, pti_bond_state;                       // bond状态，0为未激活，1为激活，2为破坏
     int ppi_linear_deformation, pti_linear_deformation;       // 储存bond线性变形
     int ppi_angular_deformation, pti_angular_deformation;     // 储存bond角变形
-    int ppi_normal_stress, pti_normal_stress;                 // 法向强度
-    int ppi_tangential_stress, pti_tangential_stress;         // 切向强度
+    int ppi_normal_stress_limit, pti_normal_stress_limit;                 // 法向强度
+    int ppi_tangential_stress_limit, pti_tangential_stress_limit;         // 切向强度
     int ppi_scale_factor_normal_stress_limit, pti_scale_factor_normal_stress_limit;         // 储存缩放后的法向强度
     int ppi_scale_factor_tangential_stress_limit, pti_scale_factor_tangential_stress_limit; // 储存缩放后的切向强度
     int soft_factor;                                          // 软化程度
     int ppi_soft_factor, pti_soft_factor;                     // 储存软化程度
     double activation_time;                                   // 激活时间
     double search_distance;                                   // 搜索距离
+    bool output_bond_force;
+    bool output_bond_moment;
+    bool output_bond_normal_stress;
+    bool output_bond_tangential_stress;
+    bool output_scaled_bond_normal_stress;
+    bool output_scaled_bond_tangential_stress;
+    bool output_bond_state;
+    bool output_bond_linear_deformation;
+    bool output_bond_angular_deformation;
+    bool output_contact_normal_stress_limit;
+    bool output_contact_tangential_stress_limit;
+    bool output_scaled_contact_normal_stress_limit;
+    bool output_scaled_contact_tangential_stress_limit;
+    bool output_softening_factor;
     ModuleMaterialInteraction *material_interactions;         // 材料交互参数
     ModuleMaterialProperties *material_properties;            // 材料属性
 };
@@ -121,8 +135,23 @@ ROCKY_PLUGIN_CONFIGURE(input_data, module_data)
     data->material_interactions = new ModuleMaterialInteraction[n_material_interactions];
     data->material_properties = new ModuleMaterialProperties[n_materials];
     // 获取一般参数
-    data->activation_time = input_data.get_model().get_double("activation_time");
-    data->search_distance = input_data.get_model().get_double("search_distance");
+    auto general_properties = input_data.get_model();
+    data->activation_time = general_properties.get_double("activation_time");
+    data->search_distance = general_properties.get_double("search_distance");
+    data->output_bond_force = general_properties.get_bool("output_bond_force");
+    data->output_bond_moment = general_properties.get_bool("output_bond_moment");
+    data->output_bond_normal_stress = general_properties.get_bool("output_bond_normal_stress");
+    data->output_bond_tangential_stress = general_properties.get_bool("output_bond_tangential_stress");
+    data->output_scaled_bond_normal_stress = general_properties.get_bool("output_scaled_bond_normal_stress");
+    data->output_scaled_bond_tangential_stress = general_properties.get_bool("output_scaled_bond_tangential_stress");
+    data->output_bond_state = general_properties.get_bool("output_bond_state");
+    data->output_bond_linear_deformation = general_properties.get_bool("output_bond_linear_deformation");
+    data->output_bond_angular_deformation = general_properties.get_bool("output_bond_angular_deformation");
+    data->output_contact_normal_stress_limit = general_properties.get_bool("output_contact_normal_stress_limit");
+    data->output_contact_tangential_stress_limit = general_properties.get_bool("output_contact_tangential_stress_limit");
+    data->output_scaled_contact_normal_stress_limit = general_properties.get_bool("output_scaled_contact_normal_stress_limit");
+    data->output_scaled_contact_tangential_stress_limit = general_properties.get_bool("output_scaled_contact_tangential_stress_limit");
+    data->output_softening_factor = general_properties.get_bool("output_softening_factor");
     // 获取材料交互参数
     for (int i = 0; i < n_material_interactions; ++i)
     {
@@ -157,24 +186,24 @@ ROCKY_PLUGIN_SETUP(model, module_data)
 {
     auto data = static_cast<ModuleData *>(module_data);
     // bond力和力矩
-    create_contact_scalars<double3>(model, "Bond Force", "N", data->ppi_force, data->pti_force, true);
-    create_contact_scalars<double3>(model, "Bond Moment", "N.m", data->ppi_moment, data->pti_moment, true);
+    create_contact_scalars<double3>(model, "Bond Force", "N", data->ppi_force, data->pti_force, data->output_bond_force);
+    create_contact_scalars<double3>(model, "Bond Moment", "N.m", data->ppi_moment, data->pti_moment, data->output_bond_moment);
     // bond当前法向和切向应力
-    create_contact_scalars<double>(model, "Bond Normal Stress", "Pa", data->ppi_normal_stress_cur, data->pti_normal_stress_cur, true);
-    create_contact_scalars<double>(model, "Bond Tangential Stress", "Pa", data->ppi_tangential_stress_cur, data->pti_tangential_stress_cur, true);
+    create_contact_scalars<double>(model, "Bond Normal Stress", "Pa", data->ppi_normal_stress_cur, data->pti_normal_stress_cur, data->output_bond_normal_stress);
+    create_contact_scalars<double>(model, "Bond Tangential Stress", "Pa", data->ppi_tangential_stress_cur, data->pti_tangential_stress_cur, data->output_bond_tangential_stress);
     // 缩放后的法向和切向应力
-    create_contact_scalars<double>(model, "Scaled Bond Normal Stress", "Pa", data->ppi_scale_factor_normal_stress_cur, data->pti_scale_factor_normal_stress_cur, true);
-    create_contact_scalars<double>(model, "Scaled Bond Tangential Stress", "Pa", data->ppi_scale_factor_tangential_stress_cur, data->pti_scale_factor_tangential_stress_cur, true);
+    create_contact_scalars<double>(model, "Scaled Bond Normal Stress", "Pa", data->ppi_scale_factor_normal_stress_cur, data->pti_scale_factor_normal_stress_cur, data->output_scaled_bond_normal_stress);
+    create_contact_scalars<double>(model, "Scaled Bond Tangential Stress", "Pa", data->ppi_scale_factor_tangential_stress_cur, data->pti_scale_factor_tangential_stress_cur, data->output_scaled_bond_tangential_stress);
     // bond状态和变形量
-    create_contact_scalars<int>(model, "Bond State", "-", data->ppi_bond_state, data->pti_bond_state, true);
-    create_contact_scalars<double3>(model, "Bond Linear Deformation", "m", data->ppi_linear_deformation, data->pti_linear_deformation, true);
-    create_contact_scalars<double3>(model, "Bond Angular Deformation", "rad", data->ppi_angular_deformation, data->pti_angular_deformation, true);
+    create_contact_scalars<int>(model, "Bond State", "-", data->ppi_bond_state, data->pti_bond_state, data->output_bond_state);
+    create_contact_scalars<double3>(model, "Bond Linear Deformation", "m", data->ppi_linear_deformation, data->pti_linear_deformation, data->output_bond_linear_deformation);
+    create_contact_scalars<double3>(model, "Bond Angular Deformation", "rad", data->ppi_angular_deformation, data->pti_angular_deformation, data->output_bond_angular_deformation);
     // bond强度
-    create_contact_scalars<double>(model, "Contact Normal Stress Limit", "N/m2", data->ppi_normal_stress, data->pti_normal_stress, true);
-    create_contact_scalars<double>(model, "Contact Tangential Stress Limit", "N/m2", data->ppi_tangential_stress, data->pti_tangential_stress, true);
+    create_contact_scalars<double>(model, "Contact Normal Stress Limit", "N/m2", data->ppi_normal_stress_limit, data->pti_normal_stress_limit, data->output_contact_normal_stress_limit);
+    create_contact_scalars<double>(model, "Contact Tangential Stress Limit", "N/m2", data->ppi_tangential_stress_limit, data->pti_tangential_stress_limit, data->output_contact_tangential_stress_limit);
     // 缩放后的bond强度
-    create_contact_scalars<double>(model, "Scaled Contact Normal Stress Limit", "N/m2", data->ppi_scale_factor_normal_stress_limit, data->pti_scale_factor_normal_stress_limit, true);
-    create_contact_scalars<double>(model, "Scaled Contact Tangential Stress Limit", "N/m2", data->ppi_scale_factor_tangential_stress_limit, data->pti_scale_factor_tangential_stress_limit, true);
+    create_contact_scalars<double>(model, "Scaled Contact Normal Stress Limit", "N/m2", data->ppi_scale_factor_normal_stress_limit, data->pti_scale_factor_normal_stress_limit, data->output_scaled_contact_normal_stress_limit);
+    create_contact_scalars<double>(model, "Scaled Contact Tangential Stress Limit", "N/m2", data->ppi_scale_factor_tangential_stress_limit, data->pti_scale_factor_tangential_stress_limit, data->output_scaled_contact_tangential_stress_limit);
     model.get_particle_contact_scalars().mark_scalar_as_history_dependent(data->ppi_force);
     model.get_particle_contact_scalars().mark_scalar_as_history_dependent(data->ppi_moment);
     model.get_particle_contact_scalars().mark_scalar_as_history_dependent(data->ppi_linear_deformation);
@@ -183,7 +212,7 @@ ROCKY_PLUGIN_SETUP(model, module_data)
     if (model.get_particle_scalars().find("soften factor") != -1)
     {
         data->soft_factor = model.get_particle_scalars().find("soften factor");
-        create_contact_scalars<double>(model, "Softening Factor", "-", data->ppi_soft_factor, data->pti_soft_factor, true);
+        create_contact_scalars<double>(model, "Softening Factor", "-", data->ppi_soft_factor, data->pti_soft_factor, data->output_softening_factor);
     }
 }
 
@@ -267,10 +296,10 @@ ROCKY_PLUGIN_PRE_OUTPUT(model, module_data)
     model.get_particle_contact_scalars().set_dimension(data->ppi_moment, model.get_force_factor() * model.get_length_factor());
     model.get_triangle_contact_scalars().set_dimension(data->pti_moment, model.get_force_factor() * model.get_length_factor());
     // bond 强度单位转换为Pa
-    model.get_particle_contact_scalars().set_dimension(data->ppi_normal_stress, model.get_pressure_factor());
-    model.get_triangle_contact_scalars().set_dimension(data->pti_normal_stress, model.get_pressure_factor());
-    model.get_particle_contact_scalars().set_dimension(data->ppi_tangential_stress, model.get_pressure_factor());
-    model.get_triangle_contact_scalars().set_dimension(data->pti_tangential_stress, model.get_pressure_factor());
+    model.get_particle_contact_scalars().set_dimension(data->ppi_normal_stress_limit, model.get_pressure_factor());
+    model.get_triangle_contact_scalars().set_dimension(data->pti_normal_stress_limit, model.get_pressure_factor());
+    model.get_particle_contact_scalars().set_dimension(data->ppi_tangential_stress_limit, model.get_pressure_factor());
+    model.get_triangle_contact_scalars().set_dimension(data->pti_tangential_stress_limit, model.get_pressure_factor());
     // bond 缩放后的强度单位转换为Pa
     model.get_particle_contact_scalars().set_dimension(data->ppi_scale_factor_normal_stress_limit, model.get_pressure_factor());
     model.get_triangle_contact_scalars().set_dimension(data->pti_scale_factor_normal_stress_limit, model.get_pressure_factor());
@@ -323,8 +352,8 @@ ROCKY_PLUGIN_COMPUTE_CONTACT_ADHESIVE_FORCES(contact, output_data, module_data)
     {
         set_contact_scalar_value<int>(contact, data->ppi_bond_state, data->pti_bond_state, 2); // 标记断裂
         reset_contact_forces(contact, output_data, module_data);
-        set_contact_scalar_value<double>(contact, data->ppi_normal_stress, data->pti_normal_stress, 0);
-        set_contact_scalar_value<double>(contact, data->ppi_tangential_stress, data->pti_tangential_stress, 0);
+        set_contact_scalar_value<double>(contact, data->ppi_normal_stress_limit, data->pti_normal_stress_limit, 0);
+        set_contact_scalar_value<double>(contact, data->ppi_tangential_stress_limit, data->pti_tangential_stress_limit, 0);
         set_contact_scalar_value<double>(contact, data->ppi_scale_factor_normal_stress_limit, data->pti_scale_factor_normal_stress_limit, 0);
         set_contact_scalar_value<double>(contact, data->ppi_scale_factor_tangential_stress_limit, data->pti_scale_factor_tangential_stress_limit, 0);
         return;
@@ -337,8 +366,8 @@ ROCKY_PLUGIN_COMPUTE_CONTACT_ADHESIVE_FORCES(contact, output_data, module_data)
     if(bond_state == 1)
     {
         // 读取上一步强度
-        prev_normal_force_limit = get_contact_scalar_value<double>(contact, data->ppi_normal_stress, data->pti_normal_stress);
-        prev_tangential_force_limit = get_contact_scalar_value<double>(contact, data->ppi_tangential_stress, data->pti_tangential_stress);
+        prev_normal_force_limit = get_contact_scalar_value<double>(contact, data->ppi_normal_stress_limit, data->pti_normal_stress_limit);
+        prev_tangential_force_limit = get_contact_scalar_value<double>(contact, data->ppi_tangential_stress_limit, data->pti_tangential_stress_limit);
     }
     // 激活机制修正
     const double current_time = contact.get_current_time();
@@ -511,8 +540,8 @@ ROCKY_PLUGIN_COMPUTE_CONTACT_ADHESIVE_FORCES(contact, output_data, module_data)
     double scale_factor = 1000 / (data->material_interactions[m_i].scale_factor);
 
     // 存储更新后的强度数据
-    set_contact_scalar_value<double>(contact, data->ppi_normal_stress, data->pti_normal_stress, normal_force_limit);
-    set_contact_scalar_value<double>(contact, data->ppi_tangential_stress, data->pti_tangential_stress, tangential_force_limit);
+    set_contact_scalar_value<double>(contact, data->ppi_normal_stress_limit, data->pti_normal_stress_limit, normal_force_limit);
+    set_contact_scalar_value<double>(contact, data->ppi_tangential_stress_limit, data->pti_tangential_stress_limit, tangential_force_limit);
     set_contact_scalar_value<double>(contact, data->ppi_scale_factor_normal_stress_limit, data->pti_scale_factor_normal_stress_limit, normal_force_limit * pow(scale_factor, 2));
     set_contact_scalar_value<double>(contact, data->ppi_scale_factor_tangential_stress_limit, data->pti_scale_factor_tangential_stress_limit, tangential_force_limit * pow(scale_factor, 2));
 

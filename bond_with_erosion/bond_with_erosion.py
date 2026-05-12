@@ -19,6 +19,20 @@ NAME = 'Bond With Erosion'
 class GeneralProperties:    
     activation_time = Quantity(value=0.0, unit='s', caption='Bond Activation Time')
     search_distance = Quantity(value=0.001, unit='mm', caption='Bond Search Distance')
+    output_bond_force = Boolean(value=True, caption='Output Bond Force')
+    output_bond_moment = Boolean(value=True, caption='Output Bond Moment')
+    output_bond_normal_stress = Boolean(value=True, caption='Output Bond Normal Stress')
+    output_bond_tangential_stress = Boolean(value=True, caption='Output Bond Tangential Stress')
+    output_scaled_bond_normal_stress = Boolean(value=True, caption='Output Scaled Bond Normal Stress')
+    output_scaled_bond_tangential_stress = Boolean(value=True, caption='Output Scaled Bond Tangential Stress')
+    output_bond_state = Boolean(value=True, caption='Output Bond State')
+    output_bond_linear_deformation = Boolean(value=True, caption='Output Bond Linear Deformation')
+    output_bond_angular_deformation = Boolean(value=True, caption='Output Bond Angular Deformation')
+    output_contact_normal_stress_limit = Boolean(value=True, caption='Output Contact Normal Stress Limit')
+    output_contact_tangential_stress_limit = Boolean(value=True, caption='Output Contact Tangential Stress Limit')
+    output_scaled_contact_normal_stress_limit = Boolean(value=True, caption='Output Scaled Contact Normal Stress Limit')
+    output_scaled_contact_tangential_stress_limit = Boolean(value=True, caption='Output Scaled Contact Tangential Stress Limit')
+    output_softening_factor = Boolean(value=True, caption='Output Softening Factor')
 
 
 @container_model()
