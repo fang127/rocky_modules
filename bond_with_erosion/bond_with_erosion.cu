@@ -587,9 +587,9 @@ ROCKY_PLUGIN_COMPUTE_CONTACT_ADHESIVE_FORCES(contact, output_data, module_data)
     set_contact_scalar_value<double>(contact, data->ppi_normal_stress_bending, data->pti_normal_stress_bending, normal_stress_bending);
     set_contact_scalar_value<double>(contact, data->ppi_tangential_stress_shear, data->pti_tangential_stress_shear, tangential_stress_shear);
     set_contact_scalar_value<double>(contact, data->ppi_tangential_stress_torsion, data->pti_tangential_stress_torsion, tangential_stress_torsion);
-    set_contact_scalar_value<double>(contact, data->ppi_scale_factor_normal_stress_cur, data->pti_scale_factor_normal_stress_cur, pow(scale_factor,3) * maximum_normal_stress);
-    set_contact_scalar_value<double>(contact, data->ppi_scale_factor_tangential_stress_cur, data->pti_scale_factor_tangential_stress_cur, pow(scale_factor,3) * maximum_tangential_stress);
-    const bool stress_exceeded = (pow(scale_factor,3) * maximum_normal_stress >= pow(scale_factor,2) * normal_force_limit || pow(scale_factor,3) * maximum_tangential_stress >=pow(scale_factor,2) * tangential_force_limit);
+    set_contact_scalar_value<double>(contact, data->ppi_scale_factor_normal_stress_cur, data->pti_scale_factor_normal_stress_cur, pow(scale_factor, 3) * maximum_normal_stress);
+    set_contact_scalar_value<double>(contact, data->ppi_scale_factor_tangential_stress_cur, data->pti_scale_factor_tangential_stress_cur, pow(scale_factor, 3) * maximum_tangential_stress);
+    const bool stress_exceeded = (pow(scale_factor, 3) * maximum_normal_stress >= pow(scale_factor, 2) * normal_force_limit || pow(scale_factor, 3) * maximum_tangential_stress >=pow(scale_factor, 2) * tangential_force_limit);
     if (stress_exceeded)
     {
         set_contact_scalar_value<int>(contact, data->ppi_bond_state, data->pti_bond_state, 2); // 标记断裂
