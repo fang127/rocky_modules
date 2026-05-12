@@ -1,0 +1,12 @@
+[Core]
+Name = Darcy Resistance Source
+Module = darcy_resistance_source
+
+[Documentation]
+Author = Fang
+Version = 1.0.0
+Website = /
+Description = Implements the Darcy-Forchheimer resistance source 
+    for erosion simulations using the Ergun equation. Calculates explicit 
+    and implicit fluid momentum source terms based on local porosity, 
+    fluid viscosity, density, and particle size.

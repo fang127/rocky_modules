@@ -1,0 +1,9 @@
+[Core]
+Name = Contact With Erosion
+Module = contact_with_erosion
+
+[Documentation]
+Author = Fang
+Version = 1.0.1
+Website = 1435319932@qq.com
+Description = JKR model with erosion.

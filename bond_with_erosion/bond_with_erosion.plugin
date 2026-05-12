@@ -1,0 +1,14 @@
+[Core]
+Name = Bond With Erosion
+Module = bond_with_erosion
+
+[Documentation]
+Author = Custom
+Version = 1.0.0
+Website = /
+Description = This module is designed to simulate the behavior of
+    agglomerate materials by using a model which bonds particles
+    together using cylindrical, massless, spring-dashpot connections.
+    These bonds can be broken at any time if the tensile or shear 
+    stresses exceed prescribed values. Also, the module creates bonds
+    for particles recently unfrozen by the "Particle Freeze Outside Region" module.

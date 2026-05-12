@@ -1,0 +1,9 @@
+[Core]
+Name = CFD Get Fluid Density
+Module = cfd_get_fluid_density
+
+[Documentation]
+Author = Fang
+Version = 1.0.0
+Website = /
+Description = Get Fluid Density

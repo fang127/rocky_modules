@@ -1,0 +1,11 @@
+[Core]
+Name = Parametric Gidaspow, Bezburuah & Ding
+Module = parametric_gidaspow_drag_law
+
+[Documentation]
+Author = Ansys
+Version = 1.0.0
+Website = ansys.com
+Description = Enables you to use a parametric version of the Gidaspow, Bezburuah & Ding 
+	Drag Law for computing the drag coefficient for the drag force between particles 
+	and fluids when CFD Coupling 2-Way with Ansys Fluent is enabled.
