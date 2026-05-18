@@ -11,13 +11,37 @@ struct Data
     double vg_alpha;               // alpha
     double residual_water_content; // 残余含水量
     double K_sat;                  // 饱和渗透率
+    bool output_explicit_fluid_momentum_source;
+    bool output_implicit_fluid_momentum_source;
+    bool output_vg_saturation;
+    bool output_vg_theta;
+    bool output_vg_effective_saturation;
+    bool output_vg_suction;
+    bool output_vg_krel;
+    bool output_vg_forchheimer_f;
+    bool output_vg_darcy_d;
+    bool output_vg_reynolds;
+    bool output_vg_fluid_speed;
+    bool output_vg_porosity;
+    bool output_vg_kr;
 };
 
 struct ModuleData
 {
-    Data *data;          // 输入的参数
-    int explicit_source; // 显式源项标量
-    int implicit_source; // 隐式源项标量
+    Data *data;                  // 输入的参数
+    int explicit_source;         // 显式源项标量
+    int implicit_source;         // 隐式源项标量
+    int vg_saturation;           // VG 饱和度
+    int vg_theta;                // VG 体积含水率
+    int vg_effective_saturation; // VG 有效饱和度
+    int vg_suction;              // VG 基质吸力
+    int vg_krel;                 // VG 非饱和水力传导率
+    int vg_forchheimer_f;        // Forchheimer 惯性阻力系数
+    int vg_darcy_d;              // Darcy 黏性阻力系数
+    int vg_reynolds;             // Reynolds 数
+    int vg_fluid_speed;          // 流体速度幅值
+    int vg_porosity;             // 孔隙率
+    int vg_kr;                   // 无量纲相对渗透率
 };
 
 ROCKY_PLUGIN("VG_GDB_Law", "1.0.0")
@@ -36,11 +60,22 @@ ROCKY_PLUGIN_CONFIGURE(input_data, module_data)
     // 获取VG基质吸力参数
     pluginData->data->n = input_data.get_model().get_double("n");
     pluginData->data->vg_alpha = input_data.get_model().get_double("vg_alpha");
-    pluginData->data->residual_water_content =
-        input_data.get_model().get_double("residual_water_content");
-    pluginData->data->relax_alpha =
-        input_data.get_model().get_double("relax_alpha");
+    pluginData->data->residual_water_content = input_data.get_model().get_double("residual_water_content");
+    pluginData->data->relax_alpha = input_data.get_model().get_double("relax_alpha");
     pluginData->data->K_sat = input_data.get_model().get_double("K_sat");
+    pluginData->data->output_explicit_fluid_momentum_source = input_data.get_model().get_bool("output_explicit_fluid_momentum_source");
+    pluginData->data->output_implicit_fluid_momentum_source = input_data.get_model().get_bool("output_implicit_fluid_momentum_source");
+    pluginData->data->output_vg_saturation = input_data.get_model().get_bool("output_vg_saturation");
+    pluginData->data->output_vg_theta = input_data.get_model().get_bool("output_vg_theta");
+    pluginData->data->output_vg_effective_saturation = input_data.get_model().get_bool("output_vg_effective_saturation");
+    pluginData->data->output_vg_suction = input_data.get_model().get_bool("output_vg_suction");
+    pluginData->data->output_vg_krel = input_data.get_model().get_bool("output_vg_krel");
+    pluginData->data->output_vg_forchheimer_f = input_data.get_model().get_bool("output_vg_forchheimer_f");
+    pluginData->data->output_vg_darcy_d = input_data.get_model().get_bool("output_vg_darcy_d");
+    pluginData->data->output_vg_reynolds = input_data.get_model().get_bool("output_vg_reynolds");
+    pluginData->data->output_vg_fluid_speed = input_data.get_model().get_bool("output_vg_fluid_speed");
+    pluginData->data->output_vg_porosity = input_data.get_model().get_bool("output_vg_porosity");
+    pluginData->data->output_vg_kr = input_data.get_model().get_bool("output_vg_kr");
 
     module_data = static_cast<void *>(pluginData);
 }
@@ -49,10 +84,19 @@ ROCKY_PLUGIN_CONFIGURE(input_data, module_data)
 ROCKY_PLUGIN_SETUP(model, module_data)
 {
     auto data = static_cast<ModuleData *>(module_data);
-    data->explicit_source = model.get_particle_scalars().add<double3>(
-        "ExplicitFluidMomentumSource", "N/m3", true);
-    data->implicit_source = model.get_particle_scalars().add<double>(
-        "ImplicitFluidMomentumSource", "N.s/m4", true);
+    data->explicit_source = model.get_particle_scalars().add<double3>("ExplicitFluidMomentumSource", "N/m3", data->data->output_explicit_fluid_momentum_source);
+    data->implicit_source = model.get_particle_scalars().add<double>("ImplicitFluidMomentumSource", "N.s/m4", data->data->output_implicit_fluid_momentum_source);
+    data->vg_saturation = model.get_particle_scalars().add<double>("VG_Saturation", "-", data->data->output_vg_saturation);
+    data->vg_theta = model.get_particle_scalars().add<double>("VG_Theta", "-", data->data->output_vg_theta);
+    data->vg_effective_saturation = model.get_particle_scalars().add<double>("VG_EffectiveSaturation", "-", data->data->output_vg_effective_saturation);
+    data->vg_suction = model.get_particle_scalars().add<double>("VG_Suction", "Pa", data->data->output_vg_suction);
+    data->vg_krel = model.get_particle_scalars().add<double>("VG_Krel", "m/s", data->data->output_vg_krel);
+    data->vg_forchheimer_f = model.get_particle_scalars().add<double>("VG_Forchheimer_F", "1/m", data->data->output_vg_forchheimer_f);
+    data->vg_darcy_d = model.get_particle_scalars().add<double>("VG_Darcy_D", "1/m2", data->data->output_vg_darcy_d);
+    data->vg_reynolds = model.get_particle_scalars().add<double>("VG_Reynolds", "-", data->data->output_vg_reynolds);
+    data->vg_fluid_speed = model.get_particle_scalars().add<double>("VG_FluidSpeed", "m/s", data->data->output_vg_fluid_speed);
+    data->vg_porosity = model.get_particle_scalars().add<double>("VG_Porosity", "-", data->data->output_vg_porosity);
+    data->vg_kr = model.get_particle_scalars().add<double>("VG_Kr", "-", data->data->output_vg_kr);
     model.get_fluid_scalars().enable_storage_cell_volume();
 }
 
@@ -76,16 +120,19 @@ ROCKY_PLUGIN_INITIALIZE_CUDA(model, host_data, device_id, module_device_data)
 ROCKY_PLUGIN_PRE_OUTPUT(model, module_data)
 {
     auto data = static_cast<ModuleData *>(module_data);
-    model.get_particle_scalars().set_dimension(
-        data->explicit_source,
-        model.get_force_factor() /
-            (model.get_length_factor() * model.get_length_factor() *
-             model.get_length_factor()));
-    model.get_particle_scalars().set_dimension(
-        data->implicit_source,
-        model.get_force_factor() * model.get_time_factor() /
-            (model.get_length_factor() * model.get_length_factor() *
-             model.get_length_factor() * model.get_length_factor()));
+    model.get_particle_scalars().set_dimension(data->explicit_source, model.get_force_factor() / (model.get_length_factor() * model.get_length_factor() * model.get_length_factor()));
+    model.get_particle_scalars().set_dimension(data->implicit_source, model.get_force_factor() * model.get_time_factor() / (model.get_length_factor() * model.get_length_factor() * model.get_length_factor() * model.get_length_factor()));
+    model.get_particle_scalars().set_dimension(data->vg_saturation, 1.0);
+    model.get_particle_scalars().set_dimension(data->vg_theta, 1.0);
+    model.get_particle_scalars().set_dimension(data->vg_effective_saturation, 1.0);
+    model.get_particle_scalars().set_dimension(data->vg_suction, model.get_pressure_factor());
+    model.get_particle_scalars().set_dimension(data->vg_krel, model.get_length_factor() / model.get_time_factor());
+    model.get_particle_scalars().set_dimension(data->vg_forchheimer_f, 1.0 / model.get_length_factor());
+    model.get_particle_scalars().set_dimension(data->vg_darcy_d, 1.0 / (model.get_length_factor() * model.get_length_factor()));
+    model.get_particle_scalars().set_dimension(data->vg_reynolds, 1.0);
+    model.get_particle_scalars().set_dimension(data->vg_fluid_speed, model.get_length_factor() / model.get_time_factor());
+    model.get_particle_scalars().set_dimension(data->vg_porosity, 1.0);
+    model.get_particle_scalars().set_dimension(data->vg_kr, 1.0);
 }
 
 ROCKY_PLUGIN_TEAR_DOWN(model, data)
@@ -108,54 +155,6 @@ ROCKY_PLUGIN_TEAR_DOWN_CUDA(model, device_id, device_data)
 
 ROCKY_PLUGIN_CFD_COUPLING()
 
-// inline ROCKY_FUNCTIONS double parametric_gidaspow(double Re,
-//                                                 double alpha_f,
-//                                                 double phi,
-//                                                 double param_power_coeff,
-//                                                 double param_viscous_coeff,
-//                                                 double param_kinetic_coeff)
-// {
-//     double Cd;
-
-//     if (alpha_f > 0.8)
-//     {
-//         if (Re * alpha_f < 1000)
-//         {
-//             Cd = 24 / alpha_f / Re * (1 + 0.15 * pow(alpha_f * Re, 0.687)) *
-//                 pow(alpha_f, -param_power_coeff);
-//         }
-//         else
-//         {
-//             Cd = 0.44 * pow(alpha_f, -param_power_coeff);
-//         }
-//     }
-//     else
-//     {
-//         Cd = param_viscous_coeff * (1 - alpha_f) / (alpha_f * phi * phi * Re)
-//         +
-//             param_kinetic_coeff / phi;
-//     }
-
-//     return Cd;
-// }
-
-// // GDB计算拖曳力系数
-// ROCKY_PLUGIN_CFD_COUPLING_DRAG_COEFFICIENT(particle, cfd, data)
-// {
-//     auto plugin_data = static_cast<Data *>(data);
-
-//     const double reynolds = cfd.get_reynolds_number();          // 雷诺数
-//     const double fluid_fraction = 1 - cfd.get_solid_fraction(); //
-//     流体体积分数 const double sphericity = particle.get_sphericity(); //
-//     颗粒球形度
-
-//     return parametric_gidaspow(
-//         reynolds, fluid_fraction, sphericity, plugin_data->param_power_coeff,
-//         plugin_data->param_viscous_coeff, plugin_data->param_kinetic_coeff);
-// }
-
-// ROCKY_PLUGIN_CFD_COUPLING_DRAG_COEFFICIENT_END()
-
 // 在流体求解前计算颗粒对流体的阻力源项
 ROCKY_PLUGIN_PRE_FORCE_ON_FLUID(device_model, particle, cfd, module_data)
 {
@@ -164,34 +163,18 @@ ROCKY_PLUGIN_PRE_FORCE_ON_FLUID(device_model, particle, cfd, module_data)
 
     // 高孔隙率直接跳过计算
     const double porosity = 1 - cfd.get_solid_fraction(); // 孔隙率
-    // if (porosity >= 0.7)
-    // {
-    //     double3 zero = {0.0, 0.0, 0.0};
-
-    //     particle.get_scalars().add_explicit_fluid_momentum(zero);
-    //     particle.get_scalars().add_implicit_fluid_momentum(0.0);
-
-    //     particle.get_scalars().set_scalar<double3>(plugin_data->explicit_source,
-    //                                                zero);
-    //     particle.get_scalars().set_scalar<double>(plugin_data->implicit_source,
-    //                                               0.0);
-
-    //     return;
-    // }
 
     // 当前时间获取流体和颗粒数据
-    const double fluid_density = cfd.get_fluid_density(); // 流体密度
-    const double partical_diameter =
-        cfd.get_particle_equivalent_diameter();                   // 颗粒直径
-    double Sr = (fluid_density * 1000 - 1.225) / (998.2 - 1.225); // 饱和度
+    const double fluid_density = cfd.get_fluid_density();                    // 流体密度
+    const double partical_diameter = cfd.get_particle_equivalent_diameter(); // 颗粒直径
+    double Sr = (fluid_density * 1000 - 1.225) / (998.2 - 1.225);            // 饱和度
     double dt = cfd.get_cfd_time_step();
-    double3 relative_v = cfd.get_relative_velocity();           // 相对速度
-    double3 particle_v = particle.get_translational_velocity(); // 颗粒速度
-    double3 fluid_v = relative_v + particle_v;                  // 流体速度
-    const double theta_r =
-        plugin_data->data->residual_water_content; // 残余含水率
-    const double theta_s = porosity;               // 饱和含水率
-    const double n = plugin_data->data->n;         // VG n参数
+    double3 relative_v = cfd.get_relative_velocity();                 // 相对速度
+    double3 particle_v = particle.get_translational_velocity();       // 颗粒速度
+    double3 fluid_v = relative_v + particle_v;                        // 流体速度
+    const double theta_r = plugin_data->data->residual_water_content; // 残余含水率
+    const double theta_s = porosity;                                  // 饱和含水率
+    const double n = plugin_data->data->n;                            // VG n参数
     double m = 1.0 - 1.0 / n;
     const double vg_alpha = plugin_data->data->vg_alpha; // VG alpha参数
     const double K_sat = plugin_data->data->K_sat;       // 饱和渗透率
@@ -212,13 +195,22 @@ ROCKY_PLUGIN_PRE_FORCE_ON_FLUID(device_model, particle, cfd, module_data)
     const double Se_min = 1e-6;     // 避免 pow(0, neg)
     const double Se_ramp = 0.2;     // 当 Se < 0.2 时做平滑
     const double suction_cap = 1e5; // 最大吸力限制（Pa）
+    double Se = 0.0;
+    if (theta_s - theta_r > small_eps)
+    {
+        Se = (theta - theta_r) / (theta_s - theta_r);
+        if (Se < 0.0)
+            Se = 0.0;
+        if (Se > 1.0)
+            Se = 1.0;
+    }
 
     if (theta > theta_r && theta < theta_s)
     {
         if (theta_s - theta_r > small_eps)
         {
             // 1. 计算原始等效饱和度 Se_raw
-            double Se = (theta - theta_r) / (theta_s - theta_r);
+            Se = (theta - theta_r) / (theta_s - theta_r);
 
             // clamp 到 [Se_min, 1]
             if (Se <= Se_min)
@@ -272,15 +264,14 @@ ROCKY_PLUGIN_PRE_FORCE_ON_FLUID(device_model, particle, cfd, module_data)
     double relax_alpha = plugin_data->data->relax_alpha;
     double viscosity = cfd.get_fluid_viscosity(); // 流体粘度
     double reynolds = cfd.get_reynolds_number();  // 雷诺数
-    double speed = sqrt(fluid_v.x * fluid_v.x + fluid_v.y * fluid_v.y +
-                        fluid_v.z * fluid_v.z);
+    double speed = sqrt(fluid_v.x * fluid_v.x + fluid_v.y * fluid_v.y + fluid_v.z * fluid_v.z);
     double eps_v = 1e-9;
     // 计算阻力系数D和F
     double D = 1 / K_rel; // 粘性阻力系数
     double F = 0.0;       // 惯性阻力系数，层流为0
     if (reynolds > 10)
     {
-        F = 3.5 / (pow(porosity, 3) * partical_diameter); // euler方程经验值
+        F = 1.75 * (1 - porosity) / (pow(porosity, 3) * partical_diameter); // ergun方程经验值
     }
     // 显式源项（N/m3)
     double3 source = {0.0, 0.0, 0.0};
@@ -299,13 +290,26 @@ ROCKY_PLUGIN_PRE_FORCE_ON_FLUID(device_model, particle, cfd, module_data)
             -relax_alpha * (D * viscosity + F * fluid_density * speed);
     }
 
+    double Kr = 0.0;
+    if (K_sat > 0.0)
+        Kr = K_rel / K_sat;
+
     // 设置颗粒源项
     particle.get_scalars().add_explicit_fluid_momentum(source);
     particle.get_scalars().add_implicit_fluid_momentum(implicit_factor);
-    particle.get_scalars().set_scalar<double3>(plugin_data->explicit_source,
-                                               source);
-    particle.get_scalars().set_scalar<double>(plugin_data->implicit_source,
-                                              implicit_factor);
+    particle.get_scalars().set_scalar<double3>(plugin_data->explicit_source, source);
+    particle.get_scalars().set_scalar<double>(plugin_data->implicit_source, implicit_factor);
+    particle.get_scalars().set_scalar<double>(plugin_data->vg_saturation, Sr);
+    particle.get_scalars().set_scalar<double>(plugin_data->vg_theta, theta);
+    particle.get_scalars().set_scalar<double>(plugin_data->vg_effective_saturation, Se);
+    particle.get_scalars().set_scalar<double>(plugin_data->vg_suction, suction);
+    particle.get_scalars().set_scalar<double>(plugin_data->vg_krel, K_rel);
+    particle.get_scalars().set_scalar<double>(plugin_data->vg_forchheimer_f, F);
+    particle.get_scalars().set_scalar<double>(plugin_data->vg_darcy_d, D);
+    particle.get_scalars().set_scalar<double>(plugin_data->vg_reynolds, reynolds);
+    particle.get_scalars().set_scalar<double>(plugin_data->vg_fluid_speed, speed);
+    particle.get_scalars().set_scalar<double>(plugin_data->vg_porosity, porosity);
+    particle.get_scalars().set_scalar<double>(plugin_data->vg_kr, Kr);
 }
 
 ROCKY_PLUGIN_PRE_FORCE_ON_FLUID_END()
