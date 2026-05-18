@@ -44,7 +44,7 @@ struct ModuleData
     int vg_kr;                   // 无量纲相对渗透率
 };
 
-ROCKY_PLUGIN("VG_GDB_Law", "1.0.0")
+ROCKY_PLUGIN("VG_Law", "1.0.0")
 
 ROCKY_PLUGIN_CONFIGURE(input_data, module_data)
 {

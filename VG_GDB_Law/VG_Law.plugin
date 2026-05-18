@@ -1,0 +1,9 @@
+[Core]
+Name = VG_Law
+Module = VG_Law
+
+[Documentation]
+Author = Ansys
+Version = 1.0.0
+Website = ansys.com
+Description = VG_Law plugin for Rocky DEM.

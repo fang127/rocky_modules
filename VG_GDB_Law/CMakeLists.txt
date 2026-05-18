@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.12)  # 必须3.12或更高
 find_package(RockySDK REQUIRED)
 
 ## PKG_NAME: Define name of custom module 
-set(PKG_NAME "VG_GDB_Law")
+set(PKG_NAME "VG_Law")
 
 ## ROCKY_PLUGIN_INSTALLATION_DIR: Defines the installation folder.
 # By default, the modules are installed in your ROCKY_PLUGINS_PATH 

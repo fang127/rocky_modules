@@ -5,7 +5,7 @@ from rocky20.addins.addin_specs import RockyAddinSpecs
 from rocky20.addins.addin_types import Quantity, Boolean
 from yapsy.IPlugin import IPlugin
 
-NAME = 'VG_GDB_Law'
+NAME = 'VG_Law'
 
 @data_model(icon=None, caption=NAME)
 class ParametricGidaspowModel:
@@ -43,7 +43,7 @@ class Specs(RockyAddinSpecs):
 
     @classmethod
     def CreateAddin(cls):
-        return cls.CreateDynamicAddin(Path(__file__).parent, 'VG_GDB_Law')
+        return cls.CreateDynamicAddin(Path(__file__).parent, 'VG_Law')
 
 class Plugin(IPlugin):
     def get_addin_specs(self):
