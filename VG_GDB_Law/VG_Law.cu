@@ -11,6 +11,7 @@ struct Data
     double vg_alpha;               // alpha
     double residual_water_content; // 残余含水量
     double K_sat;                  // 饱和渗透率
+    double scale_factor;           // 缩放因子
     bool output_explicit_fluid_momentum_source;
     bool output_implicit_fluid_momentum_source;
     bool output_vg_saturation;
@@ -63,6 +64,7 @@ ROCKY_PLUGIN_CONFIGURE(input_data, module_data)
     pluginData->data->residual_water_content = input_data.get_model().get_double("residual_water_content");
     pluginData->data->relax_alpha = input_data.get_model().get_double("relax_alpha");
     pluginData->data->K_sat = input_data.get_model().get_double("K_sat");
+    pluginData->data->scale_factor = input_data.get_model().get_double("scale_factor");
     pluginData->data->output_explicit_fluid_momentum_source = input_data.get_model().get_bool("output_explicit_fluid_momentum_source");
     pluginData->data->output_implicit_fluid_momentum_source = input_data.get_model().get_bool("output_implicit_fluid_momentum_source");
     pluginData->data->output_vg_saturation = input_data.get_model().get_bool("output_vg_saturation");
@@ -177,7 +179,11 @@ ROCKY_PLUGIN_PRE_FORCE_ON_FLUID(device_model, particle, cfd, module_data)
     const double n = plugin_data->data->n;                            // VG n参数
     double m = 1.0 - 1.0 / n;
     const double vg_alpha = plugin_data->data->vg_alpha; // VG alpha参数
-    const double K_sat = plugin_data->data->K_sat;       // 饱和渗透率
+    const double K_sat_base = 1e-8;                      // 1000基准测得的饱和渗透率
+    const double relax_alpha_base = 1e-8;                // 1000基准测得的松弛系数
+    const double normalized_scale = plugin_data->data->scale_factor / 1000.0;
+    const double scale_multiplier = normalized_scale * normalized_scale;
+    const double K_sat = plugin_data->data->K_sat * K_sat_base * scale_multiplier; // 饱和渗透率
 
     // Sr范围[0,1]
     if (Sr < 0)
@@ -261,7 +267,7 @@ ROCKY_PLUGIN_PRE_FORCE_ON_FLUID(device_model, particle, cfd, module_data)
 
     // Darcy–Forchheimer方程，层流时退化为达西,S= - (D * viscosity + 0.5 * F *
     // fluid_density * speed) * fluid_v
-    double relax_alpha = plugin_data->data->relax_alpha;
+    double relax_alpha = plugin_data->data->relax_alpha * relax_alpha_base;
     double viscosity = cfd.get_fluid_viscosity(); // 流体粘度
     double reynolds = cfd.get_reynolds_number();  // 雷诺数
     double speed = sqrt(fluid_v.x * fluid_v.x + fluid_v.y * fluid_v.y + fluid_v.z * fluid_v.z);
