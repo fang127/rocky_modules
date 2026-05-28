@@ -219,7 +219,7 @@ ROCKY_PLUGIN_PRE_FORCE_ON_FLUID(device_model, particle, cfd, module_data)
     const double theta_r = plugin_data->data->residual_water_content; // 残余含水率
     const double theta_s = porosity;                                  // 饱和含水率
     const double n = plugin_data->data->n;                            // VG n参数
-    double m = 1.0 - 1.0 / n;
+    const double m = 1.0 - 1.0 / n;
     const double vg_alpha = plugin_data->data->vg_alpha; // VG alpha参数
     const double normalized_scale = plugin_data->data->scale_factor / 1000.0;
     const double scale_multiplier = normalized_scale * normalized_scale;
