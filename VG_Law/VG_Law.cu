@@ -8,9 +8,9 @@ struct Data
     // double param_kinetic_coeff;    // 动能系数
     double n;                      // n
     double relax_alpha;            // 松弛系数
-    double vg_alpha;               // alpha
+    double vg_alpha;               // alpha，单位 1/m
     double residual_water_content; // 残余含水量
-    double K_sat;                  // 饱和渗透率
+    double K_sat;                  // 饱和水力传导率，单位 m/s
     double scale_factor;           // 缩放因子
     double fluent_gravity;         // Fluent侧重力加速度
     bool output_explicit_fluid_momentum_source;
@@ -107,6 +107,8 @@ ROCKY_PLUGIN_SETUP(model, module_data)
 ROCKY_PLUGIN_NON_DIMENSIONALIZE(model, module_data)
 {
     auto data = static_cast<ModuleData *>(module_data);
+    data->data->K_sat /= model.get_length_factor() / model.get_time_factor();
+    data->data->vg_alpha /= 1.0 / model.get_length_factor();
     data->data->fluent_gravity /= model.get_length_factor() / (model.get_time_factor() * model.get_time_factor());
 }
 
@@ -171,45 +173,66 @@ ROCKY_PLUGIN_PRE_FORCE_ON_FLUID(device_model, particle, cfd, module_data)
 
     auto plugin_data = static_cast<ModuleData *>(module_data);
 
-    // 高孔隙率直接跳过计算
+    // =========================
+    // 1. CFD/DEM 基本变量
+    // =========================
+
     const double porosity = 1 - cfd.get_solid_fraction(); // 孔隙率
 
     // 当前时间获取流体和颗粒数据
-    const double fluid_density = cfd.get_fluid_density();                    // 流体密度
-    const double partical_diameter = cfd.get_particle_equivalent_diameter(); // 颗粒直径
-    double Sr = (fluid_density * 1000 - 1.225) / (998.2 - 1.225);            // 饱和度
-    double dt = cfd.get_cfd_time_step();
-    double3 relative_v = cfd.get_relative_velocity();                 // 相对速度
-    double3 particle_v = particle.get_translational_velocity();       // 颗粒速度
-    double3 fluid_v = relative_v + particle_v;                        // 流体速度
-    const double theta_r = plugin_data->data->residual_water_content; // 残余含水率
-    const double theta_s = porosity;                                  // 饱和含水率
-    const double n = plugin_data->data->n;                            // VG n参数
-    double m = 1.0 - 1.0 / n;
-    const double vg_alpha = plugin_data->data->vg_alpha; // VG alpha参数
-    const double K_sat_base = 1e-8;                      // 1000基准测得的饱和渗透率
-    const double relax_alpha_base = 1e-8;                // 1000基准测得的松弛系数
-    const double normalized_scale = plugin_data->data->scale_factor / 1000.0;
-    const double scale_multiplier = normalized_scale * normalized_scale;
-    const double K_sat = plugin_data->data->K_sat * K_sat_base * scale_multiplier; // 饱和渗透率
+    const double fluid_density = cfd.get_fluid_density(); // 流体密度
+    double density_for_permeability = fluid_density;
+    if (density_for_permeability < 1e-12)
+        density_for_permeability = 1e-12;
+    // Fluent 侧重力加速度
+    double gravity = plugin_data->data->fluent_gravity;
+    if (gravity < 0.0)
+        gravity = -gravity;
+    if (gravity < 1e-12)
+        gravity = 1e-12;
 
+    const double rho_g = density_for_permeability * gravity;
+
+    const double partical_diameter = cfd.get_particle_equivalent_diameter(); // 颗粒直径
+
+    // TODO，可以通过fluent UDM的方式获取
+    double Sr = (fluid_density * 1000 - 1.225) / (998.2 - 1.225); // 饱和度
     // Sr范围[0,1]
     if (Sr < 0)
         Sr = 0;
     if (Sr > 1)
         Sr = 1;
 
-    // 计算体积含水率
-    double theta = porosity * Sr;
+    // double dt = cfd.get_cfd_time_step();
+    double3 relative_v = cfd.get_relative_velocity();           // 相对速度
+    double3 particle_v = particle.get_translational_velocity(); // 颗粒速度
+    double3 fluid_v = relative_v + particle_v;                  // 流体速度
 
-    double suction = 0.0;
-    double K_unsat = K_sat; // 非饱和水力传导率初始化，单位 m/s
-    // 数值保护
-    const double small_eps = 1e-12;
-    const double Se_min = 1e-6;     // 避免 pow(0, neg)
-    const double Se_ramp = 0.2;     // 当 Se < 0.2 时做平滑
-    const double suction_cap = 1e5; // 最大吸力限制（Pa）
+    const double viscosity = cfd.get_fluid_viscosity(); // 流体粘度
+    const double reynolds = cfd.get_reynolds_number();  // 雷诺数
+
+    const double speed = sqrt(fluid_v.x * fluid_v.x + fluid_v.y * fluid_v.y + fluid_v.z * fluid_v.z);
+
+    // =========================
+    // 2. VG 参数
+    // =========================
+    const double theta_r = plugin_data->data->residual_water_content; // 残余含水率
+    const double theta_s = porosity;                                  // 饱和含水率
+    const double n = plugin_data->data->n;                            // VG n参数
+    double m = 1.0 - 1.0 / n;
+    const double vg_alpha = plugin_data->data->vg_alpha; // VG alpha参数
+    const double normalized_scale = plugin_data->data->scale_factor / 1000.0;
+    const double scale_multiplier = normalized_scale * normalized_scale;
+    const double K_sat = plugin_data->data->K_sat * scale_multiplier; // 饱和水力传导率
+
+    // =========================
+    // 3. 含水率与有效饱和度
+    // =========================
+
+    // 计算体积含水率
+    const double theta = porosity * Sr;
     double Se = 0.0;
+    const double small_eps = 1e-12; // TODO 硬编码，可能需要无量纲化
     if (theta_s - theta_r > small_eps)
     {
         Se = (theta - theta_r) / (theta_s - theta_r);
@@ -219,90 +242,114 @@ ROCKY_PLUGIN_PRE_FORCE_ON_FLUID(device_model, particle, cfd, module_data)
             Se = 1.0;
     }
 
-    if (theta > theta_r && theta < theta_s)
+    // =========================
+    // 4. VG 吸力与非饱和水力传导率
+    // =========================
+
+    double suction = 0.0;       // Pa
+    double pressure_head = 0.0; // m
+    double K_unsat = K_sat;     // 非饱和水力传导率初始化，单位 m/s
+
+    // 数值保护参数
+    // TODO 硬编码，可能需要无量纲化
+    const double Se_min = 1e-6;     // 避免 pow(0, neg)
+    const double Se_ramp = 0.2;     // 当 Se < 0.2 时做平滑
+    const double suction_cap = 1e5; // 最大吸力限制（Pa）
+    const double K_min = 1e-12;
+
+    if (theta > theta_r && theta < theta_s && theta_s - theta_r > small_eps)
     {
-        if (theta_s - theta_r > small_eps)
+        // 1. 计算原始等效饱和度 Se_raw
+        Se = (theta - theta_r) / (theta_s - theta_r);
+        if (Se <= Se_min)
         {
-            // 1. 计算原始等效饱和度 Se_raw
-            Se = (theta - theta_r) / (theta_s - theta_r);
-
-            // clamp 到 [Se_min, 1]
-            if (Se <= Se_min)
-                Se = Se_min; // 防止 pow(0,负指数) 数值爆炸，使用 Se_min 代替
-            if (Se > 1.0)
-                Se = 1.0;
-
-            // 2. 小 Se 区间：平滑
-            if (Se <= Se_ramp)
-            {
-                // 计算平滑权重 w ∈ [0,1]
-                double w = Se / Se_ramp;
-                if (w < 0.0)
-                    w = 0.0;
-                if (w > 1.0)
-                    w = 1.0;
-                double Se_inv = pow(Se, -1.0 / m);
-                double psi_abs = pow(Se_inv - 1.0, 1.0 / n) / vg_alpha;
-                double psi_pa = psi_abs * 98.0638;
-
-                // 平滑（从 0 平滑到正常吸力）
-                suction = w * psi_pa;
-            }
-            else
-            {
-                // 3. 正常 VG 计算区
-                double Se_inv = pow(Se, -1.0 / m);
-                double psi_abs = pow(Se_inv - 1.0, 1.0 / n) / vg_alpha;
-                suction = psi_abs * 98.0638;
-            }
-
-            // 4. 最大吸力保护
-            if (suction > suction_cap)
-                suction = suction_cap;
-
-            // 5. VG 模型下的非饱和渗透率计算
-            double K_min = 1e-12;
-            double alpha_psi = vg_alpha * suction / 98.0638;
-            double temp_1 = pow(alpha_psi, n - 1);
-            double temp_2 = pow(alpha_psi, n);
-            double temp_fz = pow(1 - temp_1 * pow(1 + temp_2, -m), 2);
-            double temp_fm = pow(1 + temp_2, m / 2);
-            K_unsat = K_sat * temp_fz / temp_fm;
-            if (K_unsat < K_min)
-                K_unsat = K_min;
+            Se = Se_min;
         }
+        if (Se > 1.0)
+        {
+            Se = 1.0;
+        }
+
+        // VG 反算压力头：
+        // pressure_head = [(Se^(-1/m) - 1)^(1/n)] / alpha
+        const double Se_inv = pow(Se, -1.0 / m);
+        pressure_head = pow(Se_inv - 1.0, 1.0 / n) / vg_alpha; // m
+
+        // 2. 小 Se 区间做平滑，避免吸力突变
+        if (Se <= Se_ramp)
+        {
+            // 计算平滑权重 w ∈ [0,1]
+            double w = Se / Se_ramp;
+            if (w < 0.0)
+                w = 0.0;
+            if (w > 1.0)
+                w = 1.0;
+
+            // 平滑（从 0 平滑到正常吸力）
+            suction = w * rho_g * pressure_head;
+        }
+        else
+        {
+            // 3. 正常 VG 计算区
+            suction = rho_g * pressure_head;
+        }
+
+        // 4. 最大吸力保护
+        if (suction > suction_cap)
+            suction = suction_cap;
+
+        // 5. VG 模型下的非饱和渗透率计算
+        pressure_head = suction / rho_g; // 若 suction 被截断，则重新计算 pressure_head，保证后续 alpha_h 一致
+        // VG-Mualem 非饱和水力传导率
+        const double alpha_h = vg_alpha * pressure_head;
+        const double temp_1 = pow(alpha_h, n - 1);
+        const double temp_2 = pow(alpha_h, n);
+        const double temp_fz = pow(1.0 - temp_1 * pow(1.0 + temp_2, -m), 2.0);
+        const double temp_fm = pow(1.0 + temp_2, m / 2.0);
+        K_unsat = K_sat * temp_fz / temp_fm;
+        if (K_unsat < K_min)
+            K_unsat = K_min;
     }
+
+    // =========================
+    // 5. Darcy–Forchheimer 阻力系数
+    // =========================
 
     // Darcy–Forchheimer方程，层流时退化为达西,S= - (D * viscosity + 0.5 * F *
     // fluid_density * speed) * fluid_v
-    double relax_alpha = plugin_data->data->relax_alpha * relax_alpha_base;
-    double viscosity = cfd.get_fluid_viscosity(); // 流体粘度
-    double reynolds = cfd.get_reynolds_number();  // 雷诺数
-    double speed = sqrt(fluid_v.x * fluid_v.x + fluid_v.y * fluid_v.y + fluid_v.z * fluid_v.z);
-    const double eps_v = 1e-9;
-    // 计算阻力系数D和F
-    double gravity = plugin_data->data->fluent_gravity;
-    if (gravity < 0.0)
-        gravity = -gravity;
-    if (gravity < 1e-12)
-        gravity = 1e-12;
-    double density_for_permeability = fluid_density;
-    if (density_for_permeability < 1e-12)
-        density_for_permeability = 1e-12;
+
+    const double relax_alpha = plugin_data->data->relax_alpha; // 松弛因子
+
+    // // K_unsat 是水力传导率，单位 m/s
+    // 转为固有渗透率 k_intrinsic，单位 m2
     double k_intrinsic = K_unsat * viscosity / (density_for_permeability * gravity); // 固有渗透率，单位 m2
     if (k_intrinsic < 1e-20)
         k_intrinsic = 1e-20;
-    double D = 1.0 / k_intrinsic; // 粘性阻力系数，单位 1/m2
-    double F = 0.0;               // 惯性阻力系数，层流为0
-    bool source_active = speed > eps_v && porosity > 1e-4 && porosity < 0.999 && partical_diameter > 1e-12;
+
+    // Darcy 黏性阻力系数 D = 1/k，单位 1/m2
+    double D = 1.0 / k_intrinsic;
+    // Forchheimer 惯性阻力系数
+    double F = 0.0;
+
+    const double eps_v = 1e-9;
+
+    const bool source_active = speed > eps_v && porosity > 1e-4 && porosity < 0.999 && partical_diameter > 1e-12;
     if (source_active && reynolds > 10)
     {
-        F = 1.75 * (1 - porosity) / (pow(porosity, 3) * partical_diameter); // ergun方程经验值
+        F = 1.75 * (1.0 - porosity) / (pow(porosity, 3.0) * partical_diameter); // ergun方程经验值
     }
+
+    // =========================
+    // 6. 显式源项与隐式源项
+    // =========================
+    // 半隐式线性化：
+    // 目标源项：S = -[mu*D + 0.5*rho*F*|u|]u
+
     // 显式源项（N/m3)
     double3 source = {0.0, 0.0, 0.0};
     if (source_active)
     {
+
         source.x = relax_alpha * (0.5 * F * fluid_density * speed) * fluid_v.x;
         source.y = relax_alpha * (0.5 * F * fluid_density * speed) * fluid_v.y;
         source.z = relax_alpha * (0.5 * F * fluid_density * speed) * fluid_v.z;
@@ -316,6 +363,9 @@ ROCKY_PLUGIN_PRE_FORCE_ON_FLUID(device_model, particle, cfd, module_data)
             -relax_alpha * (D * viscosity + F * fluid_density * speed);
     }
 
+    // =========================
+    // 7. 输出辅助变量
+    // =========================
     double Kr = 0.0;
     if (K_sat > 0.0)
         Kr = K_unsat / K_sat;
