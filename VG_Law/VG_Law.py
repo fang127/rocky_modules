@@ -32,6 +32,11 @@ class ParametricGidaspowModel:
     output_vg_fluid_speed = Boolean(value=True, caption='Output VG Fluid Speed')
     output_vg_porosity = Boolean(value=True, caption='Output VG Porosity')
     output_vg_kr = Boolean(value=True, caption='Output VG Kr')
+    output_fluid_density = Boolean(value=True, caption='Output fluid_density')
+    output_fluid_viscosity = Boolean(value=True, caption='Output fluid_viscosity')
+    output_density_for_permeability = Boolean(value=True, caption='Output density_for_permeability')
+    output_d_times_viscosity = Boolean(value=True, caption='Output D_times_viscosity')
+    output_f_times_density_speed = Boolean(value=True, caption='Output F_times_density_speed')
 
 @data_model(icon=None, caption=NAME)
 class DragModel:

@@ -26,6 +26,11 @@ struct Data
     bool output_vg_fluid_speed;
     bool output_vg_porosity;
     bool output_vg_kr;
+    bool output_fluid_density;
+    bool output_fluid_viscosity;
+    bool output_density_for_permeability;
+    bool output_d_times_viscosity;
+    bool output_f_times_density_speed;
 };
 
 struct ModuleData
@@ -44,6 +49,11 @@ struct ModuleData
     int vg_fluid_speed;          // 流体速度幅值
     int vg_porosity;             // 孔隙率
     int vg_kr;                   // 无量纲相对渗透率
+    int fluid_density;           // 流体密度
+    int fluid_viscosity;         // 流体黏度
+    int density_for_permeability; // 渗透率计算使用的密度
+    int d_times_viscosity;       // Darcy 隐式项分量 D * viscosity
+    int f_times_density_speed;   // Forchheimer 隐式项分量 F * density * speed
 };
 
 ROCKY_PLUGIN("VG_Law", "1.0.0")
@@ -80,6 +90,11 @@ ROCKY_PLUGIN_CONFIGURE(input_data, module_data)
     pluginData->data->output_vg_fluid_speed = input_data.get_model().get_bool("output_vg_fluid_speed");
     pluginData->data->output_vg_porosity = input_data.get_model().get_bool("output_vg_porosity");
     pluginData->data->output_vg_kr = input_data.get_model().get_bool("output_vg_kr");
+    pluginData->data->output_fluid_density = input_data.get_model().get_bool("output_fluid_density");
+    pluginData->data->output_fluid_viscosity = input_data.get_model().get_bool("output_fluid_viscosity");
+    pluginData->data->output_density_for_permeability = input_data.get_model().get_bool("output_density_for_permeability");
+    pluginData->data->output_d_times_viscosity = input_data.get_model().get_bool("output_d_times_viscosity");
+    pluginData->data->output_f_times_density_speed = input_data.get_model().get_bool("output_f_times_density_speed");
 
     module_data = static_cast<void *>(pluginData);
 }
@@ -101,6 +116,11 @@ ROCKY_PLUGIN_SETUP(model, module_data)
     data->vg_fluid_speed = model.get_particle_scalars().add<double>("VG_FluidSpeed", "m/s", data->data->output_vg_fluid_speed);
     data->vg_porosity = model.get_particle_scalars().add<double>("VG_Porosity", "-", data->data->output_vg_porosity);
     data->vg_kr = model.get_particle_scalars().add<double>("VG_Kr", "-", data->data->output_vg_kr);
+    data->fluid_density = model.get_particle_scalars().add<double>("fluid_density", "kg/m3", data->data->output_fluid_density);
+    data->fluid_viscosity = model.get_particle_scalars().add<double>("fluid_viscosity", "Pa.s", data->data->output_fluid_viscosity);
+    data->density_for_permeability = model.get_particle_scalars().add<double>("density_for_permeability", "kg/m3", data->data->output_density_for_permeability);
+    data->d_times_viscosity = model.get_particle_scalars().add<double>("D_times_viscosity", "N.s/m4", data->data->output_d_times_viscosity);
+    data->f_times_density_speed = model.get_particle_scalars().add<double>("F_times_density_speed", "N.s/m4", data->data->output_f_times_density_speed);
     model.get_fluid_scalars().enable_storage_cell_volume();
 }
 
@@ -145,6 +165,11 @@ ROCKY_PLUGIN_PRE_OUTPUT(model, module_data)
     model.get_particle_scalars().set_dimension(data->vg_fluid_speed, model.get_length_factor() / model.get_time_factor());
     model.get_particle_scalars().set_dimension(data->vg_porosity, 1.0);
     model.get_particle_scalars().set_dimension(data->vg_kr, 1.0);
+    model.get_particle_scalars().set_dimension(data->fluid_density, model.get_mass_factor() / (model.get_length_factor() * model.get_length_factor() * model.get_length_factor()));
+    model.get_particle_scalars().set_dimension(data->fluid_viscosity, model.get_force_factor() * model.get_time_factor() / (model.get_length_factor() * model.get_length_factor()));
+    model.get_particle_scalars().set_dimension(data->density_for_permeability, model.get_mass_factor() / (model.get_length_factor() * model.get_length_factor() * model.get_length_factor()));
+    model.get_particle_scalars().set_dimension(data->d_times_viscosity, model.get_force_factor() * model.get_time_factor() / (model.get_length_factor() * model.get_length_factor() * model.get_length_factor() * model.get_length_factor()));
+    model.get_particle_scalars().set_dimension(data->f_times_density_speed, model.get_force_factor() * model.get_time_factor() / (model.get_length_factor() * model.get_length_factor() * model.get_length_factor() * model.get_length_factor()));
 }
 
 ROCKY_PLUGIN_TEAR_DOWN(model, data)
@@ -339,6 +364,9 @@ ROCKY_PLUGIN_PRE_FORCE_ON_FLUID(device_model, particle, cfd, module_data)
         F = 1.75 * (1.0 - porosity) / (pow(porosity, 3.0) * partical_diameter); // ergun方程经验值
     }
 
+    const double D_times_viscosity = D * viscosity;
+    const double F_times_density_speed = F * fluid_density * speed;
+
     // =========================
     // 6. 显式源项与隐式源项
     // =========================
@@ -360,7 +388,7 @@ ROCKY_PLUGIN_PRE_FORCE_ON_FLUID(device_model, particle, cfd, module_data)
     if (source_active)
     {
         implicit_factor =
-            -relax_alpha * (D * viscosity + F * fluid_density * speed);
+            -relax_alpha * (D_times_viscosity + F_times_density_speed);
     }
 
     // =========================
@@ -386,6 +414,11 @@ ROCKY_PLUGIN_PRE_FORCE_ON_FLUID(device_model, particle, cfd, module_data)
     particle.get_scalars().set_scalar<double>(plugin_data->vg_fluid_speed, speed);
     particle.get_scalars().set_scalar<double>(plugin_data->vg_porosity, porosity);
     particle.get_scalars().set_scalar<double>(plugin_data->vg_kr, Kr);
+    particle.get_scalars().set_scalar<double>(plugin_data->fluid_density, fluid_density);
+    particle.get_scalars().set_scalar<double>(plugin_data->fluid_viscosity, viscosity);
+    particle.get_scalars().set_scalar<double>(plugin_data->density_for_permeability, density_for_permeability);
+    particle.get_scalars().set_scalar<double>(plugin_data->d_times_viscosity, D_times_viscosity);
+    particle.get_scalars().set_scalar<double>(plugin_data->f_times_density_speed, F_times_density_speed);
 }
 
 ROCKY_PLUGIN_PRE_FORCE_ON_FLUID_END()
