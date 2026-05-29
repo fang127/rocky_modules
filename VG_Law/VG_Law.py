@@ -19,6 +19,8 @@ class ParametricGidaspowModel:
     K_sat = Quantity(value=1.0, unit='m/s', caption='K_sat saturated hydraulic conductivity')
     scale_factor = Quantity(value=1.0, unit='-', caption='Scale Factor')
     fluent_gravity = Quantity(value=9.81, unit='m/s2', caption='Fluent Gravity')
+    water_density = Quantity(value=998.2, unit='kg/m3', caption='Water Density')
+    air_density = Quantity(value=1.225, unit='kg/m3', caption='Air Density')
     output_explicit_fluid_momentum_source = Boolean(value=True, caption='Output Explicit Fluid Momentum Source')
     output_implicit_fluid_momentum_source = Boolean(value=True, caption='Output Implicit Fluid Momentum Source')
     output_vg_saturation = Boolean(value=True, caption='Output VG Saturation')

@@ -17,6 +17,7 @@ NAME = 'Bond With Erosion'
 
 @data_model(icon=None, caption=NAME)
 class GeneralProperties:    
+    G_s = Quantity(value=2.71, unit='-', caption='Specific Gravity of Soil Particles')
     activation_time = Quantity(value=0.0, unit='s', caption='Bond Activation Time')
     search_distance = Quantity(value=0.001, unit='mm', caption='Bond Search Distance')
     output_bond_force = Boolean(value=True, caption='Output Bond Force')

@@ -13,6 +13,8 @@ struct Data
     double K_sat;                  // 饱和水力传导率，单位 m/s
     double scale_factor;           // 缩放因子
     double fluent_gravity;         // Fluent侧重力加速度
+    double water_density;          // 水密度，单位 kg/m3
+    double air_density;            // 空气密度，单位 kg/m3
     bool output_explicit_fluid_momentum_source;
     bool output_implicit_fluid_momentum_source;
     bool output_vg_saturation;
@@ -77,6 +79,8 @@ ROCKY_PLUGIN_CONFIGURE(input_data, module_data)
     pluginData->data->K_sat = input_data.get_model().get_double("K_sat");
     pluginData->data->scale_factor = input_data.get_model().get_double("scale_factor");
     pluginData->data->fluent_gravity = input_data.get_model().get_double("fluent_gravity");
+    pluginData->data->water_density = input_data.get_model().get_double("water_density");
+    pluginData->data->air_density = input_data.get_model().get_double("air_density");
     pluginData->data->output_explicit_fluid_momentum_source = input_data.get_model().get_bool("output_explicit_fluid_momentum_source");
     pluginData->data->output_implicit_fluid_momentum_source = input_data.get_model().get_bool("output_implicit_fluid_momentum_source");
     pluginData->data->output_vg_saturation = input_data.get_model().get_bool("output_vg_saturation");
@@ -130,6 +134,9 @@ ROCKY_PLUGIN_NON_DIMENSIONALIZE(model, module_data)
     data->data->K_sat /= model.get_length_factor() / model.get_time_factor();
     data->data->vg_alpha /= 1.0 / model.get_length_factor();
     data->data->fluent_gravity /= model.get_length_factor() / (model.get_time_factor() * model.get_time_factor());
+    const double density_factor = model.get_mass_factor() / (model.get_length_factor() * model.get_length_factor() * model.get_length_factor());
+    data->data->water_density /= density_factor;
+    data->data->air_density /= density_factor;
 }
 
 // CUDA初始化
@@ -221,7 +228,10 @@ ROCKY_PLUGIN_PRE_FORCE_ON_FLUID(device_model, particle, cfd, module_data)
     const double partical_diameter = cfd.get_particle_equivalent_diameter(); // 颗粒直径
 
     // TODO，可以通过fluent UDM的方式获取
-    double Sr = (fluid_density * 1000 - 1.225) / (998.2 - 1.225); // 饱和度
+    const double density_span = plugin_data->data->water_density - plugin_data->data->air_density;
+    double Sr = 0.0; // 饱和度
+    if (density_span > 1e-12)
+        Sr = (fluid_density - plugin_data->data->air_density) / density_span;
     // Sr范围[0,1]
     if (Sr < 0)
         Sr = 0;

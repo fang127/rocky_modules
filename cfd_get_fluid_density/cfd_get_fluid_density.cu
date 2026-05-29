@@ -4,8 +4,8 @@
 struct ModuleData
 {
     int fluid_density;
-    // double air_density = 1.225;   // kg/m3
-    // double water_density = 998.2; // kg/m3
+    double air_density;   // kg/m3 before non-dimensionalization
+    double water_density; // kg/m3 before non-dimensionalization
 };
 
 ROCKY_PLUGIN("CFD Get Fluid Density", "1.0.0")
@@ -13,6 +13,9 @@ ROCKY_PLUGIN("CFD Get Fluid Density", "1.0.0")
 ROCKY_PLUGIN_CONFIGURE(input_data, module_data)
 {
     ModuleData *data = new ModuleData();
+    auto general_properties = input_data.get_model();
+    data->air_density = general_properties.get_double("air_density");
+    data->water_density = general_properties.get_double("water_density");
     module_data = static_cast<void *>(data);
 }
 
@@ -22,12 +25,13 @@ ROCKY_PLUGIN_SETUP(model, module_data)
     data->fluid_density = model.get_particle_scalars().add<double>("soften factor", "-", true);
 }
 
-// ROCKY_PLUGIN_NON_DIMENSIONALIZE(model, module_data)
-// {
-//     auto data = static_cast<ModuleData *>(module_data);
-//     data->air_density /= (model.get_mass_factor() / (model.get_length_factor() * model.get_length_factor() * model.get_length_factor()));
-//     data->water_density /= (model.get_mass_factor() / (model.get_length_factor() * model.get_length_factor() * model.get_length_factor()));
-// }
+ROCKY_PLUGIN_NON_DIMENSIONALIZE(model, module_data)
+{
+    auto data = static_cast<ModuleData *>(module_data);
+    const double density_factor = model.get_mass_factor() / (model.get_length_factor() * model.get_length_factor() * model.get_length_factor());
+    data->air_density /= density_factor;
+    data->water_density /= density_factor;
+}
 
 ROCKY_PLUGIN_INITIALIZE_CUDA(model, host_data, device_id, module_device_data)
 {
@@ -62,9 +66,9 @@ ROCKY_PLUGIN_CFD_COUPLING()
 ROCKY_PLUGIN_PRE_FORCE_ON_FLUID(model, particle, cfd, module_data)
 {
     auto data = static_cast<ModuleData *>(module_data);
-    // Sr = (density - 1.225) / (998.2-1.225)
+    // Sr = (density - air_density) / (water_density - air_density)
     const double fluid_density = cfd.get_fluid_density();
-    double Sr = (fluid_density * 1000 - 1.225) / (998.2 - 1.225);
+    double Sr = (fluid_density - data->air_density) / (data->water_density - data->air_density);
     // Sr范围[0,1]
     if (Sr < 0)
         Sr = 0;

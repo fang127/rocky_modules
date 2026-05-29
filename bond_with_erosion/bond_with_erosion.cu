@@ -47,6 +47,7 @@ struct ModuleData
     int ppi_scale_factor_tangential_stress_limit, pti_scale_factor_tangential_stress_limit; // 储存缩放后的切向强度
     int soft_factor;                                          // 软化程度
     int ppi_soft_factor, pti_soft_factor;                     // 储存软化程度
+    double G_s;                                               // 土粒比重
     double activation_time;                                   // 激活时间
     double search_distance;                                   // 搜索距离
     /* 输出控制 */
@@ -149,6 +150,7 @@ ROCKY_PLUGIN_CONFIGURE(input_data, module_data)
     data->material_properties = new ModuleMaterialProperties[n_materials];
     // 获取一般参数
     auto general_properties = input_data.get_model();
+    data->G_s = general_properties.get_double("G_s");
     data->activation_time = general_properties.get_double("activation_time");
     data->search_distance = general_properties.get_double("search_distance");
     data->output_bond_force = general_properties.get_bool("output_bond_force");
@@ -512,7 +514,7 @@ ROCKY_PLUGIN_COMPUTE_CONTACT_ADHESIVE_FORCES(contact, output_data, module_data)
     {
         // 材料常数
         int home_material_index = contact.get_home_particle().get_material_index();
-        const double G_s = 2.71;                                               // 土粒比重
+        const double G_s = data->G_s;                                          // 土粒比重
         const double e = data->material_properties[home_material_index].e;     // 孔隙比
         const double w_p = data->material_properties[home_material_index].w_p; // 塑限含水率
         const double S_rp = (w_p * G_s) / e;                                   // 塑限饱和度

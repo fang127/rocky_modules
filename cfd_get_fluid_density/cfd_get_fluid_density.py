@@ -10,7 +10,8 @@ NAME = 'CFD Get Fluid Density'
 
 @data_model(icon=None, caption=NAME)
 class Model:
-    pass
+    air_density = Quantity(value=1.225, unit='kg/m3', caption='Air Density')
+    water_density = Quantity(value=998.2, unit='kg/m3', caption='Water Density')
 
 class Specs(RockyAddinSpecs):
     name = NAME
