@@ -39,6 +39,8 @@ class ParametricGidaspowModel:
     output_density_for_permeability = Boolean(value=True, caption='Output density_for_permeability')
     output_d_times_viscosity = Boolean(value=True, caption='Output D_times_viscosity')
     output_f_times_density_speed = Boolean(value=True, caption='Output F_times_density_speed')
+    output_fluent_gravity = Boolean(value=True, caption='Output Fluent_Gravity')
+    output_k_intrinsic = Boolean(value=True, caption='Output k_intrinsic')
 
 @data_model(icon=None, caption=NAME)
 class DragModel:

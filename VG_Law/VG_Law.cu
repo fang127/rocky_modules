@@ -33,29 +33,33 @@ struct Data
     bool output_density_for_permeability;
     bool output_d_times_viscosity;
     bool output_f_times_density_speed;
+    bool output_fluent_gravity;
+    bool output_vg_k_intrinsic;
 };
 
 struct ModuleData
 {
-    Data *data;                  // 输入的参数
-    int explicit_source;         // 显式源项标量
-    int implicit_source;         // 隐式源项标量
-    int vg_saturation;           // VG 饱和度
-    int vg_theta;                // VG 体积含水率
-    int vg_effective_saturation; // VG 有效饱和度
-    int vg_suction;              // VG 基质吸力
-    int vg_k_unsat;              // VG 非饱和水力传导率
-    int vg_forchheimer_f;        // Forchheimer 惯性阻力系数
-    int vg_darcy_d;              // Darcy 黏性阻力系数
-    int vg_reynolds;             // Reynolds 数
-    int vg_fluid_speed;          // 流体速度幅值
-    int vg_porosity;             // 孔隙率
-    int vg_kr;                   // 无量纲相对渗透率
-    int fluid_density;           // 流体密度
-    int fluid_viscosity;         // 流体黏度
+    Data *data;                   // 输入的参数
+    int explicit_source;          // 显式源项标量
+    int implicit_source;          // 隐式源项标量
+    int vg_saturation;            // VG 饱和度
+    int vg_theta;                 // VG 体积含水率
+    int vg_effective_saturation;  // VG 有效饱和度
+    int vg_suction;               // VG 基质吸力
+    int vg_k_unsat;               // VG 非饱和水力传导率
+    int vg_forchheimer_f;         // Forchheimer 惯性阻力系数
+    int vg_darcy_d;               // Darcy 黏性阻力系数
+    int vg_reynolds;              // Reynolds 数
+    int vg_fluid_speed;           // 流体速度幅值
+    int vg_porosity;              // 孔隙率
+    int vg_kr;                    // 无量纲相对渗透率
+    int fluid_density;            // 流体密度
+    int fluid_viscosity;          // 流体黏度
     int density_for_permeability; // 渗透率计算使用的密度
-    int d_times_viscosity;       // Darcy 隐式项分量 D * viscosity
-    int f_times_density_speed;   // Forchheimer 隐式项分量 F * density * speed
+    int d_times_viscosity;        // Darcy 隐式项分量 D * viscosity
+    int f_times_density_speed;    // Forchheimer 隐式项分量 F * density * speed
+    int fluent_gravity;           // 输出fluent gravity
+    int vg_k_intrinsic;           // 输出k_intrinsic
 };
 
 ROCKY_PLUGIN("VG_Law", "1.0.0")
@@ -99,6 +103,8 @@ ROCKY_PLUGIN_CONFIGURE(input_data, module_data)
     pluginData->data->output_density_for_permeability = input_data.get_model().get_bool("output_density_for_permeability");
     pluginData->data->output_d_times_viscosity = input_data.get_model().get_bool("output_d_times_viscosity");
     pluginData->data->output_f_times_density_speed = input_data.get_model().get_bool("output_f_times_density_speed");
+    pluginData->data->output_fluent_gravity = input_data.get_model().get_bool("output_fluent_gravity");
+    pluginData->data->output_vg_k_intrinsic = input_data.get_model().get_bool("output_k_intrinsic");
 
     module_data = static_cast<void *>(pluginData);
 }
@@ -125,6 +131,8 @@ ROCKY_PLUGIN_SETUP(model, module_data)
     data->density_for_permeability = model.get_particle_scalars().add<double>("density_for_permeability", "kg/m3", data->data->output_density_for_permeability);
     data->d_times_viscosity = model.get_particle_scalars().add<double>("D_times_viscosity", "N.s/m4", data->data->output_d_times_viscosity);
     data->f_times_density_speed = model.get_particle_scalars().add<double>("F_times_density_speed", "N.s/m4", data->data->output_f_times_density_speed);
+    data->fluent_gravity = model.get_particle_scalars().add<double>("fluent_grivity", "m/s2", data->data->output_fluent_gravity);
+    data->vg_k_intrinsic = model.get_particle_scalars().add<double>("VG_K_intrinsic", "m2", data->data->output_vg_k_intrinsic);
     model.get_fluid_scalars().enable_storage_cell_volume();
 }
 
@@ -177,6 +185,8 @@ ROCKY_PLUGIN_PRE_OUTPUT(model, module_data)
     model.get_particle_scalars().set_dimension(data->density_for_permeability, model.get_mass_factor() / (model.get_length_factor() * model.get_length_factor() * model.get_length_factor()));
     model.get_particle_scalars().set_dimension(data->d_times_viscosity, model.get_force_factor() * model.get_time_factor() / (model.get_length_factor() * model.get_length_factor() * model.get_length_factor() * model.get_length_factor()));
     model.get_particle_scalars().set_dimension(data->f_times_density_speed, model.get_force_factor() * model.get_time_factor() / (model.get_length_factor() * model.get_length_factor() * model.get_length_factor() * model.get_length_factor()));
+    model.get_particle_scalars().set_dimension(data->fluent_gravity, model.get_length_factor() / (model.get_time_factor() * model.get_time_factor()));
+    model.get_particle_scalars().set_dimension(data->vg_k_intrinsic, model.get_length_factor() * model.get_length_factor());
 }
 
 ROCKY_PLUGIN_TEAR_DOWN(model, data)
@@ -227,7 +237,7 @@ ROCKY_PLUGIN_PRE_FORCE_ON_FLUID(device_model, particle, cfd, module_data)
 
     const double partical_diameter = cfd.get_particle_equivalent_diameter(); // 颗粒直径
 
-    // TODO，可以通过fluent UDM的方式获取
+    // 饱和度
     const double density_span = plugin_data->data->water_density - plugin_data->data->air_density;
     double Sr = 0.0; // 饱和度
     if (density_span > 1e-12)
@@ -429,6 +439,8 @@ ROCKY_PLUGIN_PRE_FORCE_ON_FLUID(device_model, particle, cfd, module_data)
     particle.get_scalars().set_scalar<double>(plugin_data->density_for_permeability, density_for_permeability);
     particle.get_scalars().set_scalar<double>(plugin_data->d_times_viscosity, D_times_viscosity);
     particle.get_scalars().set_scalar<double>(plugin_data->f_times_density_speed, F_times_density_speed);
+    particle.get_scalars().set_scalar<double>(plugin_data->fluent_gravity, gravity);
+    particle.get_scalars().set_scalar<double>(plugin_data->vg_k_intrinsic, k_intrinsic);
 }
 
 ROCKY_PLUGIN_PRE_FORCE_ON_FLUID_END()
