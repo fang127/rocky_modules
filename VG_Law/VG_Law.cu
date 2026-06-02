@@ -300,7 +300,10 @@ ROCKY_PLUGIN_PRE_FORCE_ON_FLUID(device_model, particle, cfd, module_data)
     const double Se_min = 1e-6;     // 避免 pow(0, neg)
     const double Se_ramp = 0.2;     // 当 Se < 0.2 时做平滑
     const double suction_cap = 1e5; // 最大吸力限制（Pa）
-    const double K_min = 1e-12;
+
+    // K 下限随 K_sat 缩放
+    const double Kr_min = 1e-4;
+    const double K_min = K_sat * Kr_min; // K_sat 已经随尺度缩放过
 
     if (theta > theta_r && theta < theta_s && theta_s - theta_r > small_eps)
     {
@@ -368,8 +371,10 @@ ROCKY_PLUGIN_PRE_FORCE_ON_FLUID(device_model, particle, cfd, module_data)
     // // K_unsat 是水力传导率，单位 m/s
     // 转为固有渗透率 k_intrinsic，单位 m2
     double k_intrinsic = K_unsat * viscosity / (density_for_permeability * gravity); // 固有渗透率，单位 m2
-    if (k_intrinsic < 1e-20)
-        k_intrinsic = 1e-20;
+
+    const double k_intrinsic_min = K_min * viscosity / (density_for_permeability * gravity);
+    if (k_intrinsic < k_intrinsic_min)
+        k_intrinsic = k_intrinsic_min;
 
     // Darcy 黏性阻力系数 D = 1/k，单位 1/m2
     double D = 1.0 / k_intrinsic;
