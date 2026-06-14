@@ -267,7 +267,7 @@ ROCKY_PLUGIN_PRE_FORCE_ON_FLUID(device_model, particle, cfd, module_data)
     const double m = 1.0 - 1.0 / n;
     const double vg_alpha = plugin_data->data->vg_alpha; // VG alpha参数
     const double normalized_scale = plugin_data->data->scale_factor / 1000.0;
-    const double scale_multiplier = normalized_scale * normalized_scale;
+    const double scale_multiplier = 1.0 / normalized_scale;
     const double K_sat = plugin_data->data->K_sat * scale_multiplier; // 饱和水力传导率
 
     // =========================
@@ -297,9 +297,9 @@ ROCKY_PLUGIN_PRE_FORCE_ON_FLUID(device_model, particle, cfd, module_data)
 
     // 数值保护参数
     // TODO 硬编码，可能需要无量纲化
-    const double Se_min = 1e-6;     // 避免 pow(0, neg)
-    const double Se_ramp = 0.2;     // 当 Se < 0.2 时做平滑
-    const double suction_cap = 1e5; // 最大吸力限制（Pa）
+    const double Se_min = 1e-6;                        // 避免 pow(0, neg)
+    const double Se_ramp = 0.2;                        // 当 Se < 0.2 时做平滑
+    const double suction_cap = 1e8 * normalized_scale; // 最大吸力限制（Pa）
 
     // K 下限随 K_sat 缩放
     const double Kr_min = 1e-4;
